@@ -31,6 +31,7 @@ import {
   Languages
 } from 'lucide-react';
 import { INITIAL_SCHEMES, TRIBAL_COMMUNITIES } from '../data/mockData';
+import { SchemeRuleEngine } from '../services/ruleEngine';
 import { I18N } from '../data/i18n';
 
 export function PublicHomePage({ 
@@ -62,77 +63,80 @@ export function PublicHomePage({
   // FAQ Accordion State
   const [openFaqIndex, setOpenFaqIndex] = useState(0);
 
-  // Handle Eligibility Check
+  // Handle Eligibility Check via unified SchemeRuleEngine
   const handleRunEligibilityCheck = () => {
     const selectedTribeObj = TRIBAL_COMMUNITIES.find(t => t.name === checkTribe);
     const isPvtg = selectedTribeObj?.pvtg || false;
 
-    let matches = [];
+    // Build candidate representation for the generic engine
+    let degreeLabel = 'Ph.D. in Rural Development';
+    if (checkQualification === 'ug') degreeLabel = 'B.Tech';
+    else if (checkQualification === 'class12') degreeLabel = 'Class XII';
+    else if (checkQualification === 'school') degreeLabel = 'Class X';
 
-    // NFST rule check: PG degree, income <= 6L, age <= 36, India Ph.D.
-    if (checkQualification === 'pg' && checkIncome <= 600000 && checkAge <= 36 && (checkTarget === 'india_phd' || checkTarget === 'any')) {
-      matches.push({
-        schemeId: 'NFST',
-        name: 'National Fellowship for Scheduled Tribe Students (NFST)',
-        stipend: '₹37,000 – ₹42,000 / month + ₹20,500 annual contingency',
-        location: 'Indian Universities & Research Institutes (Ph.D. / M.Phil)',
-        status: 'Highly Eligible (100% Criteria Matched)',
-        pvtgBonus: isPvtg ? '+10 Social Equity Bonus points applicable for PVTG' : null
-      });
-    }
+    const candidate = {
+      qualification: checkQualification,
+      degree: degreeLabel,
+      annualIncome: Number(checkIncome),
+      age: Number(checkAge),
+      isSt: true,
+      tribe: checkTribe,
+      pvtg: isPvtg,
+      pgMarks: 65, // Standard passing baseline for pre-checker
+      qsWorldRank: checkTarget === 'abroad' ? 120 : 9999,
+      target: checkTarget
+    };
 
-    // NOS rule check: PG or UG degree, income <= 8L, age <= 35, Abroad
-    if ((checkQualification === 'pg' || checkQualification === 'ug') && checkIncome <= 800000 && checkAge <= 35 && (checkTarget === 'abroad' || checkTarget === 'any')) {
-      matches.push({
-        schemeId: 'NOS',
-        name: 'National Overseas Scholarship (NOS)',
-        stipend: '100% Actual Tuition Fees + £9,900 / $15,400 Maintenance Allowance / yr',
-        location: 'QS World Top 500 Overseas Universities (Masters / Ph.D.)',
-        status: 'Eligible (Subject to QS Top 500 Admission Offer)',
-        pvtgBonus: isPvtg ? '3 Dedicated Priority Seats reserved for PVTG scholars' : null
-      });
-    }
+    // Evaluate all schemes using the single source of truth rule engine
+    const evaluations = SchemeRuleEngine.evaluateAll(candidate, INITIAL_SCHEMES);
 
-    // Top Class ST check: UG or PG in notified institute, income <= 6L, age <= 30
-    if (checkIncome <= 600000 && checkAge <= 30 && (checkTarget === 'premier_institute' || checkTarget === 'any')) {
-      matches.push({
-        schemeId: 'TOP_CLASS',
-        name: 'Top Class Education for ST Students',
-        stipend: '100% Tuition Fees + ₹45,000 Computer Grant + ₹2,220/mo living grant',
-        location: 'Notified Premier Institutes (IITs, IIMs, NITs, AIIMS, NLUs)',
-        status: 'Eligible (Upon confirmation of admission in notified institute)',
-        pvtgBonus: isPvtg ? '75 Dedicated Priority Slots for PVTG' : null
-      });
-    }
+    const matches = [];
 
-    // Pre-Matric ST check: school qualification, income <= 2.5L, age <= 18
-    if (checkIncome <= 250000 && checkAge <= 18 && (checkTarget === 'school' || checkTarget === 'any' || checkQualification === 'school')) {
-      matches.push({
-        schemeId: 'PRE_MATRIC',
-        name: 'Pre-Matric Scholarship Scheme for ST Students',
-        stipend: 'Day Scholar: ₹225/mo | Hosteller: ₹525/mo + Books Grant ₹750/yr',
-        location: 'Classes IX & X in Recognized Government / Aided Schools',
-        status: 'Highly Eligible (Universal Entitlement)',
-        pvtgBonus: isPvtg ? '100% Saturation Guarantee for PVTG Students' : null
-      });
-    }
+    for (const ev of evaluations) {
+      const scheme = INITIAL_SCHEMES.find(s => s.id === ev.schemeId);
+      if (!scheme) continue;
 
-    // Post-Matric ST check: class 12 or ug or pg, income <= 2.5L, age <= 35
-    if (checkIncome <= 250000 && checkAge <= 35 && (checkTarget === 'college_ug' || checkTarget === 'any' || checkQualification === 'class12' || checkQualification === 'ug')) {
-      matches.push({
-        schemeId: 'POST_MATRIC',
-        name: 'Post-Matric Scholarship Scheme for ST Students',
-        stipend: '100% Compulsory Fees + Maintenance Allowance up to ₹1,200/mo',
-        location: 'Classes XI to PG / Professional (Groups 1-4 Recognized Courses)',
-        status: 'Highly Eligible (Universal Entitlement)',
-        pvtgBonus: isPvtg ? '100% Saturation Guarantee for PVTG Students' : null
-      });
+      // Filter by target higher education / program destination if not 'any'
+      let targetMatches = true;
+      if (checkTarget === 'india_phd') targetMatches = scheme.id === 'NFST';
+      else if (checkTarget === 'abroad') targetMatches = scheme.id === 'NOS';
+      else if (checkTarget === 'premier_institute') targetMatches = scheme.id === 'TOP_CLASS';
+      else if (checkTarget === 'school') targetMatches = scheme.id === 'PRE_MATRIC';
+      else if (checkTarget === 'college_ug') targetMatches = scheme.id === 'POST_MATRIC';
+
+      if (targetMatches && (ev.status === 'ELIGIBLE' || ev.status === 'POTENTIALLY_ELIGIBLE')) {
+        let stipendText = 'Direct DBT Scholarship';
+        if (scheme.stipendJrf) stipendText = `₹${scheme.stipendJrf.toLocaleString('en-IN')} – ₹${scheme.stipendSrf.toLocaleString('en-IN')} / mo + contingency`;
+        else if (scheme.stipendAnnualGbp) stipendText = `100% Tuition Fees + £${scheme.stipendAnnualGbp}/yr living grant`;
+        else if (scheme.livingAllowanceMonthly) stipendText = `100% Tuition + ₹${scheme.livingAllowanceMonthly}/mo living assistance`;
+        else if (scheme.maintenanceAllowanceMonthly) stipendText = `100% Tuition + ₹${scheme.maintenanceAllowanceMonthly}/mo maintenance`;
+        else if (scheme.stipendDayScholar) stipendText = `Day Scholar ₹${scheme.stipendDayScholar}/mo, Hosteller ₹${scheme.stipendHosteller}/mo`;
+
+        let locationText = 'Recognized Institutions';
+        if (scheme.id === 'NFST') locationText = 'Indian Universities & Research Institutes (Ph.D. / M.Phil)';
+        else if (scheme.id === 'NOS') locationText = 'QS World Top 1,000 Overseas Universities (Masters / Ph.D.)';
+        else if (scheme.id === 'TOP_CLASS') locationText = 'Notified Premier Institutes (IITs, IIMs, NITs, AIIMS, NLUs)';
+        else if (scheme.id === 'PRE_MATRIC') locationText = 'Classes IX & X in Recognized Government / Aided Schools';
+        else if (scheme.id === 'POST_MATRIC') locationText = 'Classes XI to PG / Professional (Groups 1–4 Recognized Courses)';
+
+        matches.push({
+          schemeId: scheme.id,
+          name: scheme.name,
+          stipend: stipendText,
+          location: locationText,
+          status: ev.status === 'ELIGIBLE' ? 'Highly Eligible (100% Statutory Criteria Matched)' : 'Potentially Eligible (Review Criteria)',
+          pvtgBonus: isPvtg ? '★ Dedicated PVTG Affirmative Priority Active' : null,
+          evaluation: ev,
+          scheme
+        });
+      }
     }
 
     setCheckResult({
       matches,
       tribe: checkTribe,
       isPvtg,
+      evaluations,
       timestamp: new Date().toLocaleTimeString()
     });
   };
@@ -779,20 +783,21 @@ export function PublicHomePage({
                             onClick={() => setWhyDetails({
                               scheme: res.name,
                               schemeId: res.schemeId,
+                              evaluation: res.evaluation,
+                              schemeObj: res.scheme,
                               income: checkIncome,
                               age: checkAge,
                               tribe: checkTribe,
-                              isPvtg: checkResult.isPvtg,
-                              qualification: checkQualification
+                              isPvtg: checkResult.isPvtg
                             })}
-                            className="px-3 py-2 bg-white hover:bg-slate-50 text-blue-900 border border-blue-300 font-bold rounded-xl text-xs transition"
+                            className="px-3 py-2 bg-white hover:bg-slate-50 text-blue-900 border border-blue-300 font-bold rounded-xl text-xs transition cursor-pointer"
                           >
                             Why am I eligible? 🔍
                           </button>
 
                           <button
                             onClick={() => onLaunchGoldenDemo ? onLaunchGoldenDemo() : (onOpenRegister && onOpenRegister())}
-                            className="px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white font-bold rounded-xl text-xs transition shadow-xs"
+                            className="px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white font-bold rounded-xl text-xs transition shadow-xs cursor-pointer"
                           >
                             Start Application ➔
                           </button>
@@ -811,20 +816,20 @@ export function PublicHomePage({
                         onClick={() => setWhyDetails({
                           scheme: 'Statutory Evaluation Summary',
                           schemeId: 'INELIGIBLE',
+                          evaluations: checkResult.evaluations,
                           income: checkIncome,
                           age: checkAge,
                           tribe: checkTribe,
                           isPvtg: checkResult.isPvtg,
-                          qualification: checkQualification,
                           isIneligible: true
                         })}
-                        className="text-xs text-blue-900 font-bold underline"
+                        className="text-xs text-blue-900 font-bold underline cursor-pointer"
                       >
                         Why does this not qualify?
                       </button>
                     </div>
                     <p className="text-[11px] text-amber-800">
-                      Reason: Your selected family income (₹{(checkIncome / 100000).toFixed(2)}L) or age ({checkAge} yrs) exceeds statutory ceilings for NFST (₹6L) or NOS (₹8L). Deterministic rules ensure transparent decisions without arbitrary algorithmic rejection.
+                      Reason: Your selected family income (₹{(checkIncome / 100000).toFixed(2)}L) or age ({checkAge} yrs) exceeds statutory ceilings for NFST (₹6L), NOS (₹6L), or Pre/Post-Matric (₹2.5L). Deterministic rules ensure transparent decisions without arbitrary algorithmic rejection.
                     </p>
                   </div>
                 )}
@@ -836,7 +841,7 @@ export function PublicHomePage({
         {/* Why Am I Eligible / Statutory Rule Modal */}
         {whyDetails && (
           <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white rounded-3xl max-w-xl w-full p-6 space-y-5 shadow-2xl animate-in zoom-in-95 duration-150 text-xs">
+            <div className="bg-white rounded-3xl max-w-xl w-full p-6 space-y-4 shadow-2xl animate-in zoom-in-95 duration-150 text-xs max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-start pb-3 border-b border-slate-200">
                 <div>
                   <span className="text-[10px] font-mono font-bold bg-blue-100 text-blue-900 px-2 py-0.5 rounded">
@@ -848,56 +853,72 @@ export function PublicHomePage({
                 </div>
                 <button
                   onClick={() => setWhyDetails(null)}
-                  className="text-slate-400 hover:text-slate-700 text-lg font-bold"
+                  className="text-slate-400 hover:text-slate-700 text-lg font-bold cursor-pointer"
                 >
                   ✕
                 </button>
               </div>
 
-              <div className="space-y-3">
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
-                  <div className="flex justify-between items-center py-1 border-b border-slate-200">
-                    <span className="font-semibold text-slate-700">1. Scheduled Tribe Status:</span>
-                    <span className="font-bold text-emerald-700 flex items-center space-x-1">
-                      <span>✓ PASS</span>
-                      <span className="text-slate-500 font-normal">({whyDetails.tribe} notified under Article 342)</span>
-                    </span>
+              {/* Render Checks from SchemeRuleEngine */}
+              <div className="space-y-2">
+                {whyDetails.evaluation?.checks?.map((chk, idx) => (
+                  <div 
+                    key={chk.id || idx} 
+                    className={`p-3 rounded-xl border flex items-start justify-between gap-2 text-xs ${
+                      chk.passed ? 'bg-emerald-50/60 border-emerald-200 text-emerald-950' : 'bg-rose-50/70 border-rose-200 text-rose-950'
+                    }`}
+                  >
+                    <div>
+                      <div className="font-bold flex items-center space-x-1.5">
+                        <span>{chk.passed ? '✓ PASS:' : '✗ FAILED:'}</span>
+                        <span>{chk.criterion}</span>
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${
+                          chk.severity === 'BLOCKING' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'
+                        }`}>
+                          {chk.severity}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-600 mt-0.5">{chk.statutoryRule}</div>
+                      <div className="text-[10px] text-slate-500 mt-0.5 font-mono">
+                        Source: {chk.source} {chk.verified ? '✓' : '(unconfirmed)'}
+                      </div>
+                    </div>
+                    <div className="text-right font-mono text-[11px] shrink-0">
+                      <div>Req: <strong>{chk.required}</strong></div>
+                      <div>Actual: <strong className={chk.passed ? 'text-emerald-700' : 'text-rose-700'}>{chk.actual}</strong></div>
+                    </div>
                   </div>
+                ))}
 
-                  <div className="flex justify-between items-center py-1 border-b border-slate-200">
-                    <span className="font-semibold text-slate-700">2. Annual Family Income:</span>
-                    <span className={`font-bold flex items-center space-x-1 ${whyDetails.income <= 600000 ? 'text-emerald-700' : 'text-rose-600'}`}>
-                      <span>{whyDetails.income <= 600000 ? '✓ PASS' : '✗ CEILING EXCEEDED'}</span>
-                      <span className="text-slate-500 font-normal">(₹{(whyDetails.income).toLocaleString()} vs ₹6,00,000 ceiling)</span>
-                    </span>
+                {/* If multiple schemes evaluations (ineligible summary) */}
+                {whyDetails.isIneligible && whyDetails.evaluations && (
+                  <div className="space-y-3">
+                    {whyDetails.evaluations.map((ev) => (
+                      <div key={ev.schemeId} className="p-3 rounded-xl border border-slate-200 bg-slate-50 space-y-1.5">
+                        <div className="flex justify-between items-center font-bold">
+                          <span>{ev.schemeName} ({ev.shortName})</span>
+                          <span className={`px-2 py-0.5 rounded text-[10px] ${
+                            ev.status === 'ELIGIBLE' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                          }`}>
+                            {ev.status}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-600">{ev.summary}</p>
+                      </div>
+                    ))}
                   </div>
+                )}
+              </div>
 
-                  <div className="flex justify-between items-center py-1 border-b border-slate-200">
-                    <span className="font-semibold text-slate-700">3. Age Limit Criterion:</span>
-                    <span className={`font-bold flex items-center space-x-1 ${whyDetails.age <= 36 ? 'text-emerald-700' : 'text-rose-600'}`}>
-                      <span>{whyDetails.age <= 36 ? '✓ PASS' : '✗ OVERAGE'}</span>
-                      <span className="text-slate-500 font-normal">({whyDetails.age} yrs ≤ 36 yrs threshold)</span>
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between items-center py-1">
-                    <span className="font-semibold text-slate-700">4. Qualifying Degree:</span>
-                    <span className="font-bold text-emerald-700">
-                      ✓ Post-Graduate degree satisfied
-                    </span>
-                  </div>
-                </div>
-
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-blue-950 text-[11px] space-y-1">
-                  <strong className="block font-bold">Statutory Authority Reference:</strong>
-                  <span>Governed by MoTA NFST Scheme Guidelines Section 4.1 to 4.4. VidyaSetu uses deterministic rules to guarantee constitutional reservations and compliance without arbitrary machine-learning rejection.</span>
-                </div>
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-blue-950 text-[11px] space-y-1">
+                <strong className="block font-bold">Statutory Authority Reference:</strong>
+                <span>Governed by MoTA Central Sector & Centrally Sponsored Scheme Guidelines. Evaluated via VidyaSetu deterministic statutory rule engine. Every rule carries an official source citation.</span>
               </div>
 
               <div className="flex justify-between items-center pt-2">
                 <button
                   onClick={() => setWhyDetails(null)}
-                  className="px-4 py-2 border rounded-xl text-slate-600 hover:bg-slate-50 font-bold"
+                  className="px-4 py-2 border rounded-xl text-slate-600 hover:bg-slate-50 font-bold cursor-pointer"
                 >
                   Close
                 </button>
@@ -908,7 +929,7 @@ export function PublicHomePage({
                     if (onLaunchGoldenDemo) onLaunchGoldenDemo();
                     else if (onOpenRegister) onOpenRegister();
                   }}
-                  className="px-5 py-2.5 bg-blue-900 hover:bg-blue-800 text-white font-bold rounded-xl shadow-md flex items-center space-x-1.5"
+                  className="px-5 py-2.5 bg-blue-900 hover:bg-blue-800 text-white font-bold rounded-xl shadow-md flex items-center space-x-1.5 cursor-pointer"
                 >
                   <span>Run Golden Demo as Birsa Hemrom ➔</span>
                 </button>

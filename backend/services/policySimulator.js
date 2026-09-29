@@ -1,53 +1,77 @@
 // VidyaSetu Policy Simulation Decision Support System (DSS)
 // Evaluates policy rule changes (income ceilings, qualifying marks, age limits)
-// against a synthetic applicant demonstration pool of 10,000 records.
+// against a synthetic applicant demonstration cohort of 10,000 records.
+// Reacts continuously to rule configurations from the SchemeConfigStudio rule editor.
 
 export class PolicySimulatorService {
   /**
-   * Generates or simulates over a synthetic dataset of 10,000 demonstration applications.
-   * Clearly labeled as synthetic data for stress-testing policy adjustments.
-   * @param {Object} baselineRules - Current active scheme rules
-   * @param {Object} proposedRules - Modified scheme rules to evaluate
+   * Evaluates proposed policy adjustments dynamically.
+   * Extracts values from rules array, eligibility objects, or direct properties.
+   * @param {Object} baselineInput - Current active scheme rules
+   * @param {Object} proposedInput - Modified scheme rules to evaluate
    * @returns {Object} Comprehensive simulation impact report
    */
-  static runSimulation(baselineRules, proposedRules) {
+  static runSimulation(baselineInput = {}, proposedInput = {}) {
     const TOTAL_SYNTHETIC_POOL = 10000;
 
-    // Baseline calculation based on standard distributions:
-    // Income distribution in synthetic pool:
-    // <= 6L: 64% of applicants
-    // <= 8L: 82% of applicants
-    // <= 10L: 93% of applicants
-    const currentMaxIncome = baselineRules.maxIncome || 600000;
-    const proposedMaxIncome = proposedRules.maxIncome || 800000;
+    const extractVal = (input, field, fallback) => {
+      if (Array.isArray(input?.rules)) {
+        const r = input.rules.find(rule => rule.field === field);
+        if (r && r.value !== undefined && !isNaN(Number(r.value))) return Number(r.value);
+      }
+      if (input?.eligibility && input.eligibility[field] !== undefined && !isNaN(Number(input.eligibility[field]))) {
+        return Number(input.eligibility[field]);
+      }
+      if (input && input[field] !== undefined && !isNaN(Number(input[field]))) {
+        return Number(input[field]);
+      }
+      return fallback;
+    };
 
-    const currentMinMarks = baselineRules.minMarks || 55;
-    const proposedMinMarks = proposedRules.minMarks || 50;
+    const currentMaxIncome = extractVal(baselineInput, 'annualIncome', extractVal(baselineInput, 'maxIncome', 600000));
+    const proposedMaxIncome = extractVal(proposedInput, 'annualIncome', extractVal(proposedInput, 'maxIncome', 800000));
 
-    const currentMaxAge = baselineRules.maxAge || 36;
-    const proposedMaxAge = proposedRules.maxAge || 38;
+    const currentMinMarks = extractVal(baselineInput, 'pgMarks', extractVal(baselineInput, 'minMarks', 55));
+    const proposedMinMarks = extractVal(proposedInput, 'pgMarks', extractVal(proposedInput, 'minMarks', 50));
 
-    // Simulation model ratios
-    const incomeRatioBaseline = currentMaxIncome <= 600000 ? 0.64 : (currentMaxIncome <= 800000 ? 0.82 : 0.93);
-    const incomeRatioProposed = proposedMaxIncome <= 600000 ? 0.64 : (proposedMaxIncome <= 800000 ? 0.82 : 0.93);
+    const currentMaxAge = extractVal(baselineInput, 'age', extractVal(baselineInput, 'maxAge', 36));
+    const proposedMaxAge = extractVal(proposedInput, 'age', extractVal(proposedInput, 'maxAge', 38));
 
-    const marksRatioBaseline = currentMinMarks <= 50 ? 0.88 : (currentMinMarks <= 55 ? 0.74 : 0.58);
-    const marksRatioProposed = proposedMinMarks <= 50 ? 0.88 : (proposedMinMarks <= 55 ? 0.74 : 0.58);
+    // Continuous empirical CDF approximations calibrated for the demonstration cohort:
+    // Income distribution CDF
+    const incomeCdf = (inc) => Math.min(0.96, Math.max(0.15, 1 - Math.exp(-inc / 480000)));
+    // Qualifying marks pass rate CDF
+    const marksCdf = (marks) => Math.min(0.95, Math.max(0.12, Math.pow((100 - marks) / 65, 1.15)));
+    // Age compliance CDF
+    const ageCdf = (age) => Math.min(0.98, Math.max(0.20, Math.pow((age - 16) / 24, 0.85)));
 
-    const ageRatioBaseline = currentMaxAge >= 38 ? 0.94 : (currentMaxAge >= 36 ? 0.88 : 0.80);
-    const ageRatioProposed = proposedMaxAge >= 38 ? 0.94 : (proposedMaxAge >= 36 ? 0.88 : 0.80);
+    const incomeRatioBaseline = incomeCdf(currentMaxIncome);
+    const incomeRatioProposed = incomeCdf(proposedMaxIncome);
 
-    const baselineEligibleCount = Math.round(TOTAL_SYNTHETIC_POOL * incomeRatioBaseline * marksRatioBaseline * ageRatioBaseline * 0.68);
-    const proposedEligibleCount = Math.round(TOTAL_SYNTHETIC_POOL * incomeRatioProposed * marksRatioProposed * ageRatioProposed * 0.68);
+    const marksRatioBaseline = marksCdf(currentMinMarks);
+    const marksRatioProposed = marksCdf(proposedMinMarks);
+
+    const ageRatioBaseline = ageCdf(currentMaxAge);
+    const ageRatioProposed = ageCdf(proposedMaxAge);
+
+    // Composite eligibility model
+    const baselineEligibleCount = Math.min(
+      TOTAL_SYNTHETIC_POOL,
+      Math.max(100, Math.round(TOTAL_SYNTHETIC_POOL * incomeRatioBaseline * marksRatioBaseline * ageRatioBaseline * 0.74))
+    );
+    const proposedEligibleCount = Math.min(
+      TOTAL_SYNTHETIC_POOL,
+      Math.max(100, Math.round(TOTAL_SYNTHETIC_POOL * incomeRatioProposed * marksRatioProposed * ageRatioProposed * 0.74))
+    );
 
     const deltaEligible = proposedEligibleCount - baselineEligibleCount;
 
-    // Financial impact estimate (annual stipend + contingency per NFST scholar = ~₹4.85 Lakhs / yr)
+    // Financial impact estimate (annual average scholarship/stipend = ~₹4,85,000 / yr)
     const annualCostPerScholar = 485000;
     const estimatedBudgetDeltaCr = Number(((deltaEligible * annualCostPerScholar) / 10000000).toFixed(2));
 
     return {
-      simulationDataset: 'MoTA Synthetic Demonstration Dataset (10,000 Records)',
+      simulationDataset: 'MoTA Synthetic Demonstration Cohort (10,000 Records)',
       isSyntheticData: true,
       baselineRules: {
         maxIncome: currentMaxIncome,
@@ -66,7 +90,7 @@ export class PolicySimulatorService {
         proposedEligible: proposedEligibleCount,
         proposedEligiblePercent: Number(((proposedEligibleCount / TOTAL_SYNTHETIC_POOL) * 100).toFixed(1)),
         deltaBeneficiaries: deltaEligible,
-        percentChange: Number(((deltaEligible / baselineEligibleCount) * 100).toFixed(1)),
+        percentChange: Number(((deltaEligible / Math.max(1, baselineEligibleCount)) * 100).toFixed(1)),
         estimatedBudgetImpactCr: estimatedBudgetDeltaCr,
         additionalScrutinyLoad: Math.round(deltaEligible * 1.15)
       },
@@ -75,7 +99,7 @@ export class PolicySimulatorService {
         { group: 'ST Female Candidates (30% Horizontal Quota)', estimatedAdditionalScholars: Math.round(deltaEligible * 0.42) },
         { group: 'Aspirational Tribal Districts', estimatedAdditionalScholars: Math.round(deltaEligible * 0.35) }
       ],
-      notice: 'Simulation produced by VidyaSetu Policy Engine for decision support. Requires Ministry approval before gazetting.'
+      notice: 'Simulation produced by VidyaSetu Policy DSS for demonstration. Requires statutory Ministry approval before gazetting.'
     };
   }
 }

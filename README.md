@@ -9,7 +9,7 @@
 [![All 5 MoTA Schemes](https://img.shields.io/badge/Schemes_Covered-All_5_MoTA_DBT_Schemes-blue.svg)](#)
 [![National Portals Integrated](https://img.shields.io/badge/SSO_Adapters-Jan_Parichay_%7C_DigiLocker-blue.svg)](#)
 [![DBT Sandbox](https://img.shields.io/badge/Payments_Sandbox-PFMS_%7C_NPCI_APB-orange.svg)](#)
-[![Accessibility](https://img.shields.io/badge/Accessibility-WCAG_2.1_AA_%7C_GIGW_2.0-teal.svg)](#)
+[![Accessibility](https://img.shields.io/badge/Accessibility-WCAG_2.1_AA_Target_%7C_GIGW_2.0-teal.svg)](#)
 
 ---
 
@@ -46,7 +46,7 @@ The **Ministry of Tribal Affairs (MoTA)** administers 5 active higher-education 
 2. **Post-Matric Scholarship Scheme for ST Students**: Flagship Centrally Sponsored scheme covering higher secondary (Classes XI–XII), ITI, Polytechnic, Diploma, Undergraduate, and Postgraduate courses across 4 recognized course groups with family income ≤ ₹2.50 LPA (100% compulsory non-refundable fees + living allowance up to ₹1,200/mo).
 3. **Top Class Education for ST Students**: 100% tuition coverage, ₹45,000 IT hardware grant, books allowance, and monthly living assistance in notified premier institutions (IITs, IIMs, NITs, AIIMS, NLUs, NIDs) for scholars with family income ≤ ₹6.00 LPA.
 4. **National Fellowship for Scheduled Tribe Students (NFST)**: 750 annual research fellowships for regular M.Phil and Ph.D. scholars in Indian universities with family income ≤ ₹6.00 LPA (₹37,000–₹42,000/mo JRF/SRF stipend, HRA, and ₹20,500 annual contingency).
-5. **National Overseas Scholarship (NOS)**: 100% actual tuition fee coverage, economy return airfare, and annual living allowance (GBP 9,900 / USD 15,400) for Master's and Ph.D. studies at **QS World Top 500** universities (priority to ranking ≤ 200) with family income ≤ ₹8.00 LPA.
+5. **National Overseas Scholarship (NOS)**: 100% actual tuition fee coverage, economy return airfare, and annual living allowance (GBP 9,900 / USD 15,400) for Master's and Ph.D. studies at **QS World Top 1,000** universities (priority to top-ranked institutions) with family income ≤ ₹6.00 LPA. 20 awards: 17 ST + 3 PVTG, with 6 earmarked for women. *(Source: tribal.nic.in/ScholarshiP.aspx)*
 
 ### The Core Problem Addressed
 * **Manual Scrutiny Delays**: Applications historically required 4 to 6 months of multi-tier verification across school/university, district, state, and ministry desks.
@@ -104,21 +104,21 @@ VidyaSetu organizes its artificial intelligence capabilities into 4 modular, exp
 ```
 
 ### Module 1: Document Intelligence & OCR Service (`documentAI.js`)
-* Extracts document attributes: issuing authority, certificate serial number, date of issuance, candidate name phonetic similarity (98%+ match).
-* Cross-references applicant community against the **Central Scheduled Tribe list notified under Article 342 of the Constitution of India**.
-* Architected as a modular interface that integrates with production OCR engines (Google Document AI / Tesseract) while providing a reliable prototype sandbox.
+* Extracts document attributes: issuing authority, certificate serial number, date of issuance, and candidate name. **In the current prototype, OCR is simulated — real Tesseract OCR integration is in progress (Phase 2).**
+* Applies Jaro-Winkler similarity for cross-document name matching (thresholds: ≥0.97 match, 0.85–0.97 → human review, <0.85 → mismatch). This is a prototype implementation; production accuracy depends on document image quality.
+* Cross-references applicant community against the **Central Scheduled Tribe list notified under Article 342 of the Constitution of India** (keyword-based in prototype; production would use the official gazette database).
 
 ### Module 2: Automated Deficiency & Cross-Application Anomaly Detection
 * **Automated Deficiency Detection**: Detects lapsed certificates (e.g. an Income Certificate issued in Jan 2023, exceeding the statutory 1-fiscal-year validity window). Dispatches instant deficiency notices with a 15-day resolution window preserving queue seniority.
 * **Cross-Application Anomaly Detection**: Uncovers shared contact numbers, bank accounts, or duplicate identity markers across different applications (e.g. flagging potential fraud rings across state borders).
 
 ### Module 3: Policy Simulator Decision Support System (`policySimulator.js`)
-* Evaluates proposed policy rule adjustments (raising income ceilings, relaxing marks, adding affirmative PVTG quotas) across a calibrated demonstration pool of **10,000 Synthetic Applications**.
-* Delivers instant predictive impact analysis: projected beneficiary deltas, fiscal budget impact (in ₹ Crores), and administrative scrutiny workload changes.
+* Evaluates proposed policy rule adjustments (raising income ceilings, relaxing marks, adding affirmative PVTG quotas) across a calibrated **synthetic demonstration cohort** (illustrative dataset, not actual MoTA records).
+* Delivers instant predictive impact analysis: projected beneficiary deltas, fiscal budget impact (in ₹ Crores), and administrative scrutiny workload changes. **Note: All numbers are model estimates on synthetic data — not actual applicant counts.**
 
 ### Module 4: Multilingual Voice & Text Copilot — VidyaMitra (`VidyaMitraChatbot.jsx`)
-* Conversational assistant supporting 6 languages: English, हिन्दी (Hindi), ওডodia (Odia), ᱥᱟᱱᱛᱟᱲᱤ (Santali - Ol Chiki script), తెలుగు (Telugu), and मराठी (Marathi).
-* Equipped with Web Speech recognition and synthesis to assist first-generation tribal learners in discovering schemes and understanding eligibility.
+* Conversational assistant supporting 6 languages: English, हिन्दी (Hindi), ଓଡ଼ିଆ (Odia), ᱥᱟᱱᱛᱟᱲᱤ (Santali - Ol Chiki script), తెలుగు (Telugu), and मराठी (Marathi).
+* Speech input relies on the browser's built-in Web Speech API (available in Chrome/Edge; not supported in all environments). Synthesis (text-to-speech) works similarly. These are browser-native APIs, not a deployed ASR service.
 
 ---
 
@@ -278,7 +278,7 @@ npm run build
 VidyaSetu is designed from the ground up for equitable access across remote tribal belts:
 * **6 Supported Languages**: English, हिन्दी (Hindi), ଓଡ଼ିଆ (Odia), ᱥᱟᱱᱛᱟᱲᱤ (Santali - Ol Chiki script), తెలుగు (Telugu), and मराठी (Marathi).
 * **Low-Bandwidth 2G Mode**: Eliminates heavy graphics and compresses UI payloads for scholars in remote tribal areas.
-* **Accessibility Controls**: WCAG 2.1 AA compliant high-contrast theme and font size scaling ($A$ / $A+$).
+* **Accessibility Controls**: Targeting WCAG 2.1 AA guidelines: high-contrast theme and font size scaling ($A$ / $A+$). Not independently audited for full compliance.
 * **Screen Reader & Speech Support**: Multilingual speech recognition and synthesis via the **VidyaMitra** copilot.
 
 ---
@@ -288,6 +288,72 @@ VidyaSetu is designed from the ground up for equitable access across remote trib
 * **Constitutional Grounding**: Implements statutory reservation rules under Article 342 of the Constitution of India and official Central/State notified ST gazette lists.
 * **Explainable Decisions**: RTI-friendly decision records with deterministic rule audit trails ensure that administrative discretion is transparent and auditable.
 * **Zero Adverse Automated Decisions**: AI performs entity extraction, validation flagging, and triage prioritization; adverse decisions require statutory clause citations by authorized human officers.
+
+---
+
+## ✅ What Is Real vs. Simulated
+
+This prototype is built for SIH 2026. Being honest about what works and what is simulated is a requirement of good engineering:
+
+| Feature | Status | Notes |
+|:---|:---|:---|
+| **Rule engine** | ✅ Real | Generic deterministic engine evaluates all scheme rules from config data. No hardcoded `if (scheme.id === 'NOS')` branches (as of Phase 1). |
+| **Scheme configuration** | ✅ Real | SchemeConfigStudio saves via `PUT /api/schemes/:id` to the in-memory backend. Changes affect subsequent rule evaluations. |
+| **OCR / document reading** | 🔶 Simulated (Phase 2 in progress) | Tesseract.js integration is being added. Current version classifies by filename keywords and returns extracted fields from simulated results. |
+| **Jaro-Winkler name matching** | ✅ Real | Pure-JS implementation with no dependency; used for cross-document consistency checks. |
+| **Audit chain (SHA-256)** | ✅ Real | `auditChain.js` uses Node.js `crypto` — each block hash is cryptographically chained. Pre-seeded blocks in demo data use consistent timestamps and actual hash chains. |
+| **Policy simulator** | 🔶 Model-based | Runs a statistical model on a synthetic distribution, not on real applicant records. All numbers are illustrative. |
+| **PFMS / DBT disbursement** | 🔶 Sandbox | No real money moves. All PFMS batch IDs and UTRs are sandbox placeholders. |
+| **DigiLocker / Aadhaar KYC** | 🔶 Sandbox adapter | Simulated flow. No real DigiLocker API calls in the prototype. |
+| **Backend API** | ✅ Real | Zero-dependency Node.js server running on port 5001. Real HTTP routing, real JSON. |
+| **Eligibility API** | ✅ Real | `POST /api/eligibility/check` runs the actual rule engine against the scheme config. |
+| **NOS income ceiling** | ✅ Corrected | ₹6,00,000 (corrected from ₹8L — confirmed: tribal.nic.in, pib.gov.in). |
+| **NOS QS rank threshold** | ✅ Corrected | 1,000 (corrected from 500 — confirmed: tribal.nic.in 2024-25 guidelines). |
+| **WCAG 2.1 AA** | 🔶 Targeted | High-contrast mode and font scaling implemented; not independently audited. |
+| **Speech recognition** | 🔶 Browser API | Uses browser's native Web Speech API — available in Chrome/Edge only. Not a deployed ASR service. |
+
+### API Endpoints (Backend Port 5001)
+```
+GET  /api/health                                   Backend health & adapter status
+GET  /api/stats/mota-dbt                           Official MoTA DBT stats
+GET  /api/schemes                                  All 5 scheme configs
+PUT  /api/schemes/:schemeId                        Update scheme config (admin only)
+POST /api/eligibility/check                        Run rule engine for a candidate
+GET  /api/applications                             All applications
+GET  /api/applications/:appId                      Single application
+POST /api/applications/:appId/documents/replace    Replace a deficient document
+POST /api/applications/:appId/scrutiny/approve     Officer approval action
+POST /api/applications/:appId/scrutiny/override    Officer override with audit log
+GET  /api/audit/:appId/verify                      SHA-256 chain verification
+POST /api/policy/simulate                          Policy simulation on synthetic pool
+GET  /api/anomalies                                Cross-application anomaly clusters
+POST /api/documents/analyze                        Upload & analyze a document (Phase 2)
+```
+
+### Running the Demo with Sample Files (Phase 2+)
+```bash
+# 1. Install dependencies
+npm install
+
+# 2. Copy environment file
+cp .env.example .env
+
+# 3. Start backend
+npm run backend
+# → API live at http://localhost:5001/api
+
+# 4. Start frontend
+npm run dev
+# → UI live at http://localhost:5173
+
+# 5. Use the sample documents in /samples:
+#    valid_income_certificate.pdf       → VERIFIED
+#    expired_income_certificate.pdf     → DEFICIENT (DEF-INC-EXPIRED)
+#    name_mismatch_certificate.pdf      → MEDIUM RISK (name ≠ application)
+#    low_quality_certificate.png        → MEDIUM RISK (low OCR confidence)
+#    st_certificate_matching.pdf        → VERIFIED
+#    marksheet_matching.pdf             → VERIFIED
+```
 
 ---
 

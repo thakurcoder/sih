@@ -15,12 +15,12 @@ import {
 import { ApiClient } from '../services/apiClient';
 
 export function AuditTrailModal({ applicant, onClose }) {
-  if (!applicant) return null;
-
-  const originalLogs = applicant.auditTrail || [];
-  const [logs, setLogs] = useState(JSON.parse(JSON.stringify(originalLogs)));
+  const originalLogs = applicant?.auditTrail || [];
+  const [logs, setLogs] = useState(() => JSON.parse(JSON.stringify(originalLogs)));
   const [verificationResult, setVerificationResult] = useState(null);
   const [isTampered, setIsTampered] = useState(false);
+
+  if (!applicant) return null;
 
   // Client-side fallback SHA-256 string hash for demo if backend offline
   const computeSimpleHash = (str) => {

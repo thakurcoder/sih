@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { PublicHomePage } from './components/PublicHomePage';
@@ -43,6 +43,18 @@ export function App() {
   const [contrast, setContrast] = useState(false);
   const [textSize, setTextSize] = useState('normal');
   const [lowBandwidth, setLowBandwidth] = useState(false);
+
+  // Backend connection status (Ground rule: never silently mock)
+  const [backendStatus, setBackendStatus] = useState({ checked: false, isOnline: false });
+
+  const checkHealth = useCallback(async () => {
+    const health = await ApiClient.checkBackendHealth();
+    setBackendStatus({ checked: true, isOnline: !!health });
+  }, []);
+
+  useEffect(() => {
+    checkHealth();
+  }, [checkHealth]);
 
   // Core application state
   const [applicants, setApplicants] = useState(INITIAL_APPLICANTS);
@@ -331,6 +343,21 @@ export function App() {
     if (publicViewState === 'home') {
       return (
         <div className={`min-h-screen flex flex-col font-sans ${textSize === 'large' ? 'text-base' : 'text-sm'} ${contrast ? 'bg-black text-yellow-300' : 'bg-slate-50 text-slate-900'}`}>
+          {/* Demo Mode / Backend Offline Banner */}
+          {!backendStatus.isOnline && backendStatus.checked && (
+            <div className="bg-amber-600 text-white px-4 py-2 text-xs font-semibold flex flex-wrap items-center justify-between gap-2 shadow-sm z-50 sticky top-0">
+              <div className="flex items-center space-x-2">
+                <span className="bg-amber-800 text-amber-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">Demo mode: simulated results</span>
+                <span>Backend unreachable at <code className="bg-amber-700/60 px-1 py-0.5 rounded font-mono text-[11px]">{ApiClient.API_BASE}</code> — displaying simulated results. Start backend via <code className="bg-amber-700/60 px-1 py-0.5 rounded font-mono text-[11px]">npm run backend</code>.</span>
+              </div>
+              <button 
+                onClick={checkHealth}
+                className="px-2.5 py-1 bg-amber-800 hover:bg-amber-900 text-white rounded text-[11px] font-bold transition cursor-pointer"
+              >
+                Retry Connection
+              </button>
+            </div>
+          )}
           <PublicHomePage
             onOpenLogin={(type = 'student') => {
               setAuthPortalTab(type);
@@ -370,6 +397,22 @@ export function App() {
   // IF AUTHENTICATED: RENDER ROLE-SPECIFIC WORKSPACE
   return (
     <div className={`min-h-screen flex flex-col font-sans ${textSize === 'large' ? 'text-base' : 'text-sm'} ${contrast ? 'bg-black text-yellow-300' : 'bg-slate-50 text-slate-900'}`}>
+      {/* Demo Mode / Backend Offline Banner */}
+      {!backendStatus.isOnline && backendStatus.checked && (
+        <div className="bg-amber-600 text-white px-4 py-2 text-xs font-semibold flex flex-wrap items-center justify-between gap-2 shadow-sm z-50 sticky top-0">
+          <div className="flex items-center space-x-2">
+            <span className="bg-amber-800 text-amber-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">Demo mode: simulated results</span>
+            <span>Backend unreachable at <code className="bg-amber-700/60 px-1 py-0.5 rounded font-mono text-[11px]">{ApiClient.API_BASE}</code> — displaying simulated results. Start backend via <code className="bg-amber-700/60 px-1 py-0.5 rounded font-mono text-[11px]">npm run backend</code>.</span>
+          </div>
+          <button 
+            onClick={checkHealth}
+            className="px-2.5 py-1 bg-amber-800 hover:bg-amber-900 text-white rounded text-[11px] font-bold transition cursor-pointer"
+          >
+            Retry Connection
+          </button>
+        </div>
+      )}
+
       {/* Low-Bandwidth Mode Active Strip */}
       {lowBandwidth && (
         <div className="bg-amber-500 text-blue-950 font-bold text-xs py-1 px-4 text-center">

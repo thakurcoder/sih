@@ -94,14 +94,35 @@ const server = http.createServer(async (req, res) => {
     if (method === 'PUT' && path.startsWith('/api/schemes/')) {
       const schemeId = path.split('/')[3];
       const body = await readBody(req);
-      schemes = schemes.map(s => s.id === schemeId ? { ...s, ...body } : s);
-      return sendJson(res, 200, { success: true, message: `Scheme ${schemeId} updated in policy registry.`, scheme: body });
+      const existing = schemes.find(s => s.id === schemeId);
+      if (!existing) {
+        return sendJson(res, 404, { error: `Scheme "${schemeId}" not found in policy registry.` });
+      }
+
+      const updatedScheme = { ...existing, ...body, id: schemeId };
+      const validation = SchemeRuleEngine.validateScheme(updatedScheme);
+      if (!validation.valid) {
+        return sendJson(res, 400, { 
+          error: 'Statutory rule validation failed', 
+          validationErrors: validation.errors 
+        });
+      }
+
+      schemes = schemes.map(s => s.id === schemeId ? updatedScheme : s);
+      return sendJson(res, 200, { 
+        success: true, 
+        message: `Scheme ${schemeId} updated in statutory policy registry.`, 
+        scheme: updatedScheme 
+      });
     }
 
     // 4. Deterministic Statutory Eligibility Pre-Checker
     if (method === 'POST' && path === '/api/eligibility/check') {
       const candidate = await readBody(req);
-      const results = schemes.map(s => SchemeRuleEngine.evaluate(candidate, s));
+      const targetSchemes = candidate.targetSchemeId 
+        ? schemes.filter(s => s.id === candidate.targetSchemeId)
+        : schemes;
+      const results = targetSchemes.map(s => SchemeRuleEngine.evaluate(candidate, s));
       return sendJson(res, 200, {
         candidate,
         evaluations: results,
